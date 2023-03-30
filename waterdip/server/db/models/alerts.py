@@ -33,7 +33,7 @@ class BaseAlertDB(BaseModel):
     monitor_type: MonitorType = Field(..., description="Type of the alert")
     alert_identification: Optional[AlertIdentification]
     created_at: datetime
-    violation: Optional[str] = Field(default=None)
+    violation: Dict = Field(default=None)
 
     def dict(self, *args, **kwargs) -> "DictStrAny":
         alert = super().dict(*args, **kwargs)

@@ -81,6 +81,7 @@ class MonitorProcessor:
             )
         else:
             raise NotImplementedError()
+
         return evaluator.evaluate()
 
     def _get_event_dataset(self) -> Union[BaseDatasetDB, None]:
@@ -100,7 +101,7 @@ class MonitorProcessor:
 
         return event_dataset[0]
 
-    def _create_alert(self) -> AlertDB:
+    def _create_alert(self, violation: Dict) -> AlertDB:
         alert = BaseAlertDB(
             monitor_id=self.monitor_id,
             model_id=self.model_id,
@@ -110,7 +111,7 @@ class MonitorProcessor:
                 model_id=self.model_id, model_version_id=self._model_version_id
             ),
             created_at=datetime.datetime.utcnow(),
-            violation="true",
+            violation=violation,
         )
 
         return self._alert_repo.insert_alert(alert=alert)
@@ -126,9 +127,29 @@ class MonitorProcessor:
         logger.info(
             f"evaluation done for Monitor ID [{self.monitor_id}] number of violations: [{len(violations)}]"
         )
-        if violations:
-            # TODO add violation to the AlertDB
-            self._create_alert()
+
+        for violation in violations:
+            agg_pipeline = [
+                {
+                    "$match": {
+                        "alert_identification.model_version_id": self._model_version_id,
+                        "violation.field": violation["dimension"],
+                        "violation.focal_time_window": self.monitor_condition.evaluation_window,
+                        "violation.max_threshold": violation["threshold"].value,
+                    }
+                }
+            ]
+            count = len(list(self._alert_repo.agg_alerts(agg_pipeline)))
+            if count == 0:
+                _violation = {
+                    "field": violation["dimension"],
+                    "max_threshold": violation["threshold"].value,
+                    "model_version_id": self._model_version_id,
+                    "focal_time_window": self.monitor_condition.evaluation_window,
+                    "focal_value": violation["metric_value"],
+                }
+                self._create_alert(_violation)
+
         self._database[MONGO_COLLECTION_MONITORS].update_one(
             {"monitor_id": self.monitor_id},
             {"$set": {"last_run": datetime.datetime.utcnow()}},

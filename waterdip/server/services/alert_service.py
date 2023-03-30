@@ -185,7 +185,7 @@ class AlertService:
         }
 
     def find_alerts_by_filter(
-        self, filters: Dict, limit: int = 5
+        self, filters: Dict, limit: int = None
     ) -> List[ModelOverviewAlertList]:
         """
         Find alerts by filter
@@ -201,8 +201,9 @@ class AlertService:
                 }
             },
             {"$sort": {"created_at": -1}},
-            {"$limit": limit},
         ]
+        if limit:
+            agg_pipeline.append({"$limit": limit})
 
         return [
             ModelOverviewAlertList(
